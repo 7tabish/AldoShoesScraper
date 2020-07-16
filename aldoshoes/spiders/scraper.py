@@ -2,16 +2,7 @@ import scrapy
 import os
 from urllib.parse import urljoin
 from ..items import AldoshoesItem
-# class DarazScraper(scrapy.Spider):
-#     name="daraz"
-#     start_urls=['https://www.amazon.in/b/ref=Oct_fsc_BWL_TestWidget_2icon2_web_android/260-3009398-9663647?_encoding=UTF8&node=21733904031&pf_rd_s=mobile-hybrid-5&pf_rd_t=Gateway&pf_rd_i=mobile&pf_rd_m=A1VBAL9TL5WCBF&pf_rd_r=6P059WE8XMH9920BFT5G&pf_rd_p=179481f8-34fb-4f80-be23-d016bf580737']
-#
-#     def parse(self, response):
-#         mainresult_block=response.css("div.s-item-container")
-#         for block in mainresult_block:
-#             title=block.css("h2.s-access-title::text").extract()
-#             price=block.css("span.s-price::text").extract()
-#             yield {"Title":title,"price":price}
+
 
 class AldoSoes(scrapy.Spider):
     name="aldoshoes"
