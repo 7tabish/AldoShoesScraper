@@ -8,7 +8,6 @@ class AldoSHoes(scrapy.Spider):
     name="aldoshoes"
     allowed_domains=["aldoshoes.com"]
     start_urls=["https://www.aldoshoes.com/us/en_US"]
-    status=True
     sub_categories_counter=0
     sub_visit_counter=0
     def parse(self, response):
