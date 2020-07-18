@@ -1,9 +1,8 @@
 import scrapy
-from bs4 import BeautifulSoup as BS
 import os
 from urllib.parse import urljoin
 from ..items import AldoshoesItem
-
+from scrapy.selector import Selector
 
 class AldoSHoes(scrapy.Spider):
     name="aldoshoes"
@@ -40,22 +39,27 @@ class AldoSHoes(scrapy.Spider):
         self.sub_visit_counter=self.sub_visit_counter+1
         print("visiting sub_category no ",self.sub_visit_counter)
 
-        response_bs=BS(response.text,'html.parser')
+        product_name = response.css('header h1.c-heading.c-buy-module__product-title span::text').extract()
 
-        style_notes = response.css('div.c-read-more__inner::text').extract_first()
-        response_bs = BS(response.text, "html.parser")
-        description_3_blocks = response_bs.find('div', {'class': 'c-product-description__section-container'})
+        #some products have syle_note under p tag and some have under div
+        if response.css('div.c-read-more__inner p'):
+            style_notes=response.css('div.c-read-more__inner p::text').extract_first()
+        else:
+            style_notes=response.css('div.c-read-more__inner::text').extract_first()
+
+        #3 block exists with same content under differen media query. below selector get only first block
+        block_3_description=response.css('div.c-product-description__section-container').extract_first()
+        #convert the extracted string to selector for further parsing
+        block_3_description=Selector(text=block_3_description).css('div.c-product-description__section')
+
         details = None
         materials = None
         measurements = None
 
-        for block in description_3_blocks:
-            content_list = []
-            heading = block.find('h2').get_text()
-            for list_items in block.find_all('ul', {'class': 'u-reset-list'}, role='presentation'):
-                #list_items give us more than one name from ul at a time, to seperate name we are using anothe loop
-                for item in list_items:
-                    content_list.append(item.text)
+        for detail_block in block_3_description:
+            content_list=[]
+            heading = detail_block.css('h2::text').extract_first()
+            content_list= detail_block.css('ul.u-reset-list li::text').extract()
             if heading == "Details":
                 details = content_list
             if heading == "Materials":
@@ -64,7 +68,7 @@ class AldoSHoes(scrapy.Spider):
                 measurements = content_list
 
         colors_block=response.xpath('//*[@id="PdpProductColorSelectorOpts"]')
-        product_name = response.css('header h1.c-heading.c-buy-module__product-title span::text').extract()
+
         for color_href in colors_block.css('li a::attr(href)').extract():
             # scrapy.Request(urljoin(self.start_urls[0],color_href),callback=self.test)
              yield response.follow(color_href,callback=self.get_variations,cb_kwargs ={"product_name":product_name,
@@ -94,6 +98,6 @@ class AldoSHoes(scrapy.Spider):
             item['original_price'] = response.css('span.c-product-price__formatted-price::text').extract_first()
 
 
-        item['color']=response.xpath('//*[@id="PdpProductColorSelectorOptsLabel"]/span[2]/text()').extract_first()
+        item['color']=response.css('span.c-product-option__label-current-selection::text').extract_first()
         item['size']=response.css('ul#PdpProductSizeSelectorOpts li::text').extract()
         yield item
