@@ -1,19 +1,29 @@
 import scrapy
+from bs4 import BeautifulSoup as BS
 import os
 from urllib.parse import urljoin
 from ..items import AldoshoesItem
+# class DarazScraper(scrapy.Spider):
+#     name="daraz"
+#     start_urls=['https://www.amazon.in/b/ref=Oct_fsc_BWL_TestWidget_2icon2_web_android/260-3009398-9663647?_encoding=UTF8&node=21733904031&pf_rd_s=mobile-hybrid-5&pf_rd_t=Gateway&pf_rd_i=mobile&pf_rd_m=A1VBAL9TL5WCBF&pf_rd_r=6P059WE8XMH9920BFT5G&pf_rd_p=179481f8-34fb-4f80-be23-d016bf580737']
+#
+#     def parse(self, response):
+#         mainresult_block=response.css("div.s-item-container")
+#         for block in mainresult_block:
+#             title=block.css("h2.s-access-title::text").extract()
+#             price=block.css("span.s-price::text").extract()
+#             yield {"Title":title,"price":price}
 
-
-class AldoSoes(scrapy.Spider):
+class AldoSHoes(scrapy.Spider):
     name="aldoshoes"
     allowed_domains=["aldoshoes.com"]
     start_urls=["https://www.aldoshoes.com/us/en_US"]
+    status=True
     sub_categories_counter=0
     sub_visit_counter=0
     def parse(self, response):
         produt_urls = set([])
         for anchor in response.css("a::attr(href)").extract():
-                #get href with men, kid or women in it. men also allow women href to accepted list
                 if "men" in anchor or "kids" in anchor:
                     #to not show duplicate url on command promt we arte using this if condition
                     if anchor not in produt_urls:
@@ -38,71 +48,61 @@ class AldoSoes(scrapy.Spider):
     def parse_category_detail(self,response):
         self.sub_visit_counter=self.sub_visit_counter+1
         print("visiting sub_category no ",self.sub_visit_counter)
-        style_notes=response.xpath('//*[@id="root"]/div/div[2]/main/div[2]/section/div/div[2]/div[3]/div[2]/div/div[1]/div/div/div/text()').extract()
-        details = None
-        measurements = None
-        materials = None
-        for div_counter in range(1, 4):
-            css_selector = "#root > div > div:nth-child(2) > main > div.c-product-detail-page > section > div > div.o-grid-vertical\@under-medium-mid-only.o-grid-no-gutters > div.o-box-12.o-box-8\@md-high.o-box-7\@lg.o-box-bleed\@under-medium-mid-only.u-flex-first > div.c-product-detail__info.c-product-detail__info-description.u-hide\@under-lg-only > div > div.c-product-description__section-container > div:nth-child({})".format(
-                div_counter)
 
-            #extrct the block style_notes section
-            #some products have all these 3 headings and some have 2 or 1 that's why i am usign if condition on heading to match it with exactly according to web content
-            block = response.css(css_selector)
-            if block:
-                heading = block.css("h2::text").extract_first()
-                content_list = block.css("li::text").extract()
-                if heading == "Details":
-                    details = content_list
-                elif heading == "Materials":
-                    materials = content_list
-                elif heading == "Measurements":
-                    measurements = content_list
+        response_bs=BS(response.text,'html.parser')
+
+        style_notes = response.css('div.c-read-more__inner::text').extract_first()
+        response_bs = BS(response.text, "html.parser")
+        description_3_blocks = response_bs.find('div', {'class': 'c-product-description__section-container'})
+        details = None
+        materials = None
+        measurements = None
+
+        for block in description_3_blocks:
+            content_list = []
+            heading = block.find('h2').get_text()
+            for list_items in block.find_all('ul', {'class': 'u-reset-list'}, role='presentation'):
+                #list_items give us more than one name from ul at a time, to seperate name we are using anothe loop
+                for item in list_items:
+                    content_list.append(item.text)
+            if heading == "Details":
+                details = content_list
+            if heading == "Materials":
+                materials = content_list
+            if heading == "Measurements":
+                measurements = content_list
+
         colors_block=response.xpath('//*[@id="PdpProductColorSelectorOpts"]')
-        product_name = response.xpath(
-            '//*[@id="c-product-detail__parallax"]/div/div[1]/div/header/h1/span/text()').extract()
+        product_name = response.css('header h1.c-heading.c-buy-module__product-title span::text').extract()
         for color_href in colors_block.css('li a::attr(href)').extract():
             # scrapy.Request(urljoin(self.start_urls[0],color_href),callback=self.test)
-             yield response.follow(color_href,callback=self.get_variations,meta={"name":product_name,
-                                                                                 "style_note":style_notes,
+             yield response.follow(color_href,callback=self.get_variations,cb_kwargs ={"product_name":product_name,
+                                                                                 "style_notes":style_notes,
                                                                                  "details":details,
                                                                                  "materials":materials,
                                                                                  "measurements":measurements})
 
     #this mehtod recieve product url with different colors and it extract the price for specific colors.
-    def get_variations(self,response):
+    def get_variations(self,response,product_name,style_notes,details,materials,measurements):
         item=AldoshoesItem()
-        item['product_name']=response.meta['name']
-        item['style_note']= response.meta['style_note']
-        item['details']= response.meta['details']
-        item['materials']= response.meta['materials']
-        item['measurements']= response.meta['measurements']
+        item['product_name']=product_name
+        item['style_note']= style_notes
+        item['details']= details
+        item['materials']= materials
+        item['measurements']= measurements
         item['original_price'] = None
         item['reduce_price'] = None
         item['url']=response.request.url
         #if price_desc found it means that product is on sale and we have to get both original and reduce price
-        price_desc = response.css('div.c-buy-module__price-review-wrap span.u-visually-hidden').extract_first()
-        if price_desc:
-            item['original_price'] = response.xpath(
-                '//*[@id="c-product-detail__parallax"]/div/div[1]/div/header/div/div/span[2]/text()').extract_first()
-            item['reduce_price'] = response.xpath(
-                '//*[@id="c-product-detail__parallax"]/div/div[1]/div/header/div/div/span[3]/text()').extract_first()
-        #product is not on sale only need to get the original price
+
+        #original_price have different classes if reduced_price exists or if not.
+        item['reduce_price']= response.css('span.c-product-price__formatted-price.c-product-price__formatted-price--is-reduced::text').extract_first()
+        if item['reduce_price']:
+            item['original_price'] = response.css('span.c-product-price__formatted-price.c-product-price__formatted-price--original.u-text-strikethrough::text').extract_first()
         else:
-            item['original_price'] = response.xpath(
-                '//*[@id="c-product-detail__parallax"]/div/div[1]/div/header/div/div/span[1]/text()').extract_first()
+            item['original_price'] = response.css('span.c-product-price__formatted-price::text').extract_first()
+
 
         item['color']=response.xpath('//*[@id="PdpProductColorSelectorOptsLabel"]/span[2]/text()').extract_first()
         item['size']=response.css('ul#PdpProductSizeSelectorOpts li::text').extract()
         yield item
-        # yield {"name":product_name,
-        #         "original_price": original_price,
-        #         "reduce_price": reduce_price,
-        #         "color": color,
-        #         "size": all_size,
-        #        "style_note":style_note,
-        #        "details":details,
-        #        "materials":materials,
-        #        "measurements":measurements,
-        #        }
-
