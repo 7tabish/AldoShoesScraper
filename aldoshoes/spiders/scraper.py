@@ -5,7 +5,7 @@ from ..items import AldoshoesItem
 from scrapy.selector import Selector
 
 class AldoSHoes(scrapy.Spider):
-    name="aldoshoes"
+    name="aldoshoes1"
     allowed_domains=["aldoshoes.com"]
     start_urls=["https://www.aldoshoes.com/us/en_US"]
     sub_categories_counter=0
@@ -40,53 +40,47 @@ class AldoSHoes(scrapy.Spider):
 
         product_name = response.css('header h1.c-heading.c-buy-module__product-title span::text').extract()
 
-        #some products have syle_note under p tag and some have under div
-        if response.css('div.c-read-more__inner p'):
-            style_notes=response.css('div.c-read-more__inner p::text').extract_first()
-        else:
-            style_notes=response.css('div.c-read-more__inner::text').extract_first()
-
-        #3 block exists with same content under differen media query. below selector get only first block
-        block_3_description=response.css('div.c-product-description__section-container').extract_first()
-        #convert the extracted string to selector for further parsing
-        block_3_description=Selector(text=block_3_description).css('div.c-product-description__section')
-
-        details = None
-        materials = None
-        measurements = None
-
-        for detail_block in block_3_description:
-            content_list=[]
-            heading = detail_block.css('h2::text').extract_first()
-            content_list= detail_block.css('ul.u-reset-list li::text').extract()
-            if heading == "Details":
-                details = content_list
-            if heading == "Materials":
-                materials = content_list
-            if heading == "Measurements":
-                measurements = content_list
-
         colors_block=response.xpath('//*[@id="PdpProductColorSelectorOpts"]')
 
         for color_href in colors_block.css('li a::attr(href)').extract():
             # scrapy.Request(urljoin(self.start_urls[0],color_href),callback=self.test)
-             yield response.follow(color_href,callback=self.get_variations,cb_kwargs ={"product_name":product_name,
-                                                                                 "style_notes":style_notes,
-                                                                                 "details":details,
-                                                                                 "materials":materials,
-                                                                                 "measurements":measurements})
+             yield response.follow(color_href,callback=self.get_variations,cb_kwargs ={"product_name":product_name,})
 
     #this mehtod recieve product url with different colors and it extract the price for specific colors.
-    def get_variations(self,response,product_name,style_notes,details,materials,measurements):
+    def get_variations(self,response,product_name):
         item=AldoshoesItem()
         item['product_name']=product_name
-        item['style_note']= style_notes
-        item['details']= details
-        item['materials']= materials
-        item['measurements']= measurements
         item['original_price'] = None
         item['reduce_price'] = None
+        item['details'] = None
+        item['materials'] = None
+        item['measurements'] = None
         item['url']=response.request.url
+
+        # some products have syle_note under p tag and some have under div
+        if response.css('div.c-read-more__inner p'):
+            style_notes = response.css('div.c-read-more__inner p::text').extract_first()
+        else:
+            style_notes = response.css('div.c-read-more__inner::text').extract_first()
+
+        # 3 block exists with same content under differen media query. below selector get only first block
+        block_3_description = response.css('div.c-product-description__section-container').extract_first()
+        # convert the extracted string to selector for further parsing
+        block_3_description = Selector(text=block_3_description).css('div.c-product-description__section')
+
+
+        for detail_block in block_3_description:
+            content_list = []
+            heading = detail_block.css('h2::text').extract_first()
+            content_list = detail_block.css('ul.u-reset-list li::text').extract()
+            if heading == "Details":
+                item['details'] = content_list
+            if heading == "Materials":
+                item['materials'] = content_list
+            if heading == "Measurements":
+                item['measurements'] = content_list
+
+
         #if price_desc found it means that product is on sale and we have to get both original and reduce price
 
         #original_price have different classes if reduced_price exists or if not.
